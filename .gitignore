@@ -1,0 +1,12 @@
+# Mac files
+.DS_Store
+
+# C files
+*.out
+*.o
+*.obj
+
+# Python files
+*.pyc
+*/__pycache__/
+*.pytest_cache/
