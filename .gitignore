@@ -10,3 +10,6 @@
 *.pyc
 */__pycache__/
 *.pytest_cache/
+
+# VS Code files
+*.vscode/
