@@ -29,17 +29,17 @@ int logical_to_physical(Tensor* t, int* indices) {
 }
 
 // Helper function to recursively fill the string
-void fill_string(Tensor* t, int* indices, int dim, char** current) {
+void fill_string(Tensor* t, int* indices, int ndim, int dim, char** current) {
     if (dim == t->ndim) {
         // we're at the innermost dimension, add the element
-        float value = tensor_getitem(t, indices);
+        float value = tensor_getitem(t, indices, ndim);
         *current += sprintf(*current, "%.2f", value);
     } else {
         // iterate over the current dimension
         *current += sprintf(*current, "[");
         for (int i = 0; i < t->shape[dim]; i++) {
             indices[dim] = i;
-            fill_string(t, indices, dim + 1, current);
+            fill_string(t, indices, ndim, dim + 1, current);
             if (i < t->shape[dim] - 1) { *current += sprintf(*current, ", "); }
         }
         *current += sprintf(*current, "]");
@@ -83,8 +83,7 @@ void storage_decref(Storage* s) {
 // ----------------------------------------------------------------------------
 // Tensor: n-dimensional tensor with shape, strides, offset, and reference to Storage
 // similar to torch.Tensor
-void tensor_setitem(Tensor* t, int* indices, float val) {
-    int ndim = sizeof(indices) / sizeof(int);
+void tensor_setitem(Tensor* t, int* indices, float val, int ndim) {
     if (ndim != t->ndim) {
         fprintf(stderr, "IndexError: Number of indices does not match the number of dimensions\n");
         exit(EXIT_FAILURE);
@@ -104,8 +103,7 @@ void tensor_setitem(Tensor* t, int* indices, float val) {
     storage_setitem(t->storage, idx, val);
 }
 
-float tensor_getitem(Tensor* t, int* indices) {
-    int ndim = sizeof(indices) / sizeof(int);
+float tensor_getitem(Tensor* t, int* indices, int ndim) {
     if (ndim != t->ndim) {
         fprintf(stderr, "IndexError: Number of indices does not match the number of dimensions\n");
         exit(EXIT_FAILURE);
@@ -152,19 +150,13 @@ char* tensor_to_string(Tensor* t) {
     t->repr = mallocCheck(max_len * sizeof(char));
     char* current = t->repr;
 
-    // initialize the current pointer
-    current += sprintf(current, "[");
-
     // allocate an array to hold the indices
     int* indices = (int*) mallocCheck(t->ndim * sizeof(int));
     for (int i = 0; i < t->ndim; i++) { indices[i] = 0; }
 
     // recursively fill the string
-    fill_string(t, indices, 0, &current);
-
-    // finalize the string
-    current += sprintf(current, "]");
-    current += sprintf(current, "\0");
+    fill_string(t, indices, t->ndim, 0, &current);
+    *current = '\0'; // add null terminator
 
     // free the indices array
     free(indices);
@@ -178,16 +170,15 @@ void tensor_print(Tensor* t) {
     free(str);
 }
 
-Tensor* tensor_empty(int* shape) {
+Tensor* tensor_empty(int* shape, int ndim) {
     // compute the total size required for storage
-    int ndim = sizeof(shape) / sizeof(int);
     int size = 1;
     for (int i = 0; i < ndim; i++) { size *= shape[i]; }
 
     // allocate storage and tensor
     Tensor* t = mallocCheck(sizeof(Tensor));
     t->storage = storage_new(size);
-    t->offset = 0;  // offset is 0 when the tensor is created (non-zero for slicing)
+    t->offset = 0;
     t->ndim = ndim;
     t->shape = mallocCheck(ndim * sizeof(int));
     memcpy(t->shape, shape, ndim * sizeof(int));
@@ -200,8 +191,8 @@ Tensor* tensor_empty(int* shape) {
 }
 
 // slightly different from the original torch.arange
-Tensor* tensor_arange(float start, float step, int* shape) {
-    Tensor* t = tensor_empty(shape);
+Tensor* tensor_arange(float start, float step, int* shape, int ndim) {
+    Tensor* t = tensor_empty(shape, ndim);
     float val = start;
     for (int i = 0; i < t->storage->data_size; i++) {
         storage_setitem(t->storage, i, val);
@@ -209,17 +200,67 @@ Tensor* tensor_arange(float start, float step, int* shape) {
     }
     return t;
 }
+
+Tensor* tensor_ones(int* shape, int ndim) {
+    Tensor* t = tensor_empty(shape, ndim);
+    for (int i = 0; i < t->storage->data_size; i++) {
+        storage_setitem(t->storage, i, 1.0);
+    }
+    return t;
+}
+
+Tensor* tensor_zeros(int* shape, int ndim) {
+    Tensor* t = tensor_empty(shape, ndim);
+    for (int i = 0; i < t->storage->data_size; i++) {
+        storage_setitem(t->storage, i, 0.0);
+    }
+    return t;
+}
+
+Tensor* tensor_reshape(Tensor* t, int* shape, int ndim) {
+    // compute the total size required for storage
+    int size = 1;
+    for (int i = 0; i < ndim; i++) { size *= shape[i]; }
+
+    // check if the new shape is compatible with the old shape
+    if (size != t->storage->data_size) {
+        fprintf(stderr, "RuntimeError: cannot reshape tensor of size %d into shape ", t->storage->data_size);
+        for (int i = 0; i < ndim; i++) {
+            fprintf(stderr, "%d", shape[i]);
+            if (i < ndim - 1) { fprintf(stderr, "x"); }
+        }
+        fprintf(stderr, "\n");
+        exit(EXIT_FAILURE);
+    }
+
+    // allocate a new tensor with the new shape
+    Tensor* new_t = mallocCheck(sizeof(Tensor));
+    new_t->storage = t->storage;
+    storage_incref(t->storage);
+    new_t->offset = t->offset;
+    new_t->ndim = ndim;
+    new_t->shape = mallocCheck(ndim * sizeof(int));
+    memcpy(new_t->shape, shape, ndim * sizeof(int));
+    new_t->strides = mallocCheck(ndim * sizeof(int));
+    // strides are computed as the number of elements to skip to get to the next element in each dimension
+    new_t->strides[ndim - 1] = 1;
+    for (int i = ndim - 2; i >= 0; i--) { new_t->strides[i] = new_t->strides[i + 1] * new_t->shape[i + 1]; }
+    new_t->repr = NULL;
+    return new_t;
+}
 // ----------------------------------------------------------------------------
 
 
 int main() {
     int shape[] = {3, 4};
-    Tensor* t = tensor_arange(0.0, 1.0, shape);
+    Tensor* t = tensor_arange(0.0, 1.0, shape, 2);
     printf("Tensor:\n");
     tensor_print(t);
-    int indices[] = {1, 2};
-    float val = tensor_getitem(t, indices);
-    printf("Value at index (%d, %d): %.2f\n", indices[0], indices[1], val);
+    // Reshape the tensor
+    int new_shape[] = {2, 6};
+    Tensor* t_reshaped = tensor_reshape(t, new_shape, 2);
+    printf("Reshaped Tensor:\n");
+    tensor_print(t_reshaped);
     tensor_free(t);
     return 0;
 }
