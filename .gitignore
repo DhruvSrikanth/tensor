@@ -5,11 +5,13 @@
 *.out
 *.o
 *.obj
+*.so
 
 # Python files
 *.pyc
-*/__pycache__/
-*.pytest_cache/
+*.cython*
+*__pycache__*
+*.pytest_cache*
 
 # VS Code files
 *.vscode/

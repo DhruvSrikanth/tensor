@@ -250,7 +250,6 @@ Tensor* tensor_reshape(Tensor* t, int* shape, int ndim) {
 }
 // ----------------------------------------------------------------------------
 
-
 int main() {
     int shape[] = {3, 4};
     Tensor* t = tensor_arange(0.0, 1.0, shape, 2);

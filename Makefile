@@ -10,22 +10,22 @@ CFLAGS += -Wall -Wextra -Wpedantic \
           -Wredundant-decls -Wnested-externs -Wmissing-include-dirs
 
 # Main targets
-all: tensor1d libtensor1d.so
+all: tensor libtensor.so
 
 # Compile the main executable
-tensor1d: tensor1d.c tensor1d.h
+tensor: tensor.c tensor.h
 	$(CC) $(CFLAGS) -o $@ $< $(LDFLAGS)
 
 # Create shared library
-libtensor1d.so: tensor1d.c tensor1d.h
+libtensor.so: tensor.c tensor.h
 	$(CC) $(CFLAGS) -shared -fPIC -o $@ $< $(LDFLAGS)
 
 # Clean up build artifacts
 clean:
-	rm -f tensor1d libtensor1d.so
+	rm -f tensor libtensor.so
 
 # Test using pytest
 test:
 	pytest
 
-.PHONY: all clean test tensor1d
+.PHONY: all clean test tensor

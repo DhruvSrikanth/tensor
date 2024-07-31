@@ -22,10 +22,12 @@ typedef struct {
 void tensor_setitem(Tensor* t, int* indices, float val, int ndim);
 float tensor_getitem(Tensor* t, int* indices, int ndim);
 void tensor_free(Tensor* t);
+char* tensor_to_string(Tensor* t);
 void tensor_print(Tensor* t);
 Tensor* tensor_reshape(Tensor* t, int* shape, int ndim);
 Tensor* tensor_empty(int* shape, int ndim);
 Tensor* tensor_arange(float start, float step, int* shape, int ndim);
 Tensor* tensor_ones(int* shape, int ndim);
 Tensor* tensor_zeros(int* shape, int ndim);
+
 #endif
